@@ -21,7 +21,12 @@ docker compose up --build
 # 4. Open
 # Frontend: http://localhost:5173
 # API docs: http://localhost:8000/docs
+
+# 5. Quick test (optional — verifies everything works via API)
+bash samples/test-api.sh
 ```
+
+A sample document is included at `samples/sample-architecture.txt` for testing.
 
 ## Architecture
 

@@ -1,0 +1,90 @@
+DocLens Project: Technical Architecture Document
+Version 2.1 | Last Updated: May 2026
+
+1. EXECUTIVE SUMMARY
+
+DocLens is a document-grounded retrieval-augmented generation (RAG) application designed for enterprise document analysis. The system allows users to upload PDF and text documents, ask natural language questions, and receive AI-generated answers that are grounded in the actual content of the uploaded documents. Unlike traditional chatbot interfaces, DocLens highlights the source passages used to generate each answer, providing transparency and verifiability.
+
+The total development cost was estimated at $42,000 for the initial release, with a projected 6-month timeline. The team consists of 3 backend engineers, 2 frontend developers, and 1 machine learning engineer.
+
+2. SYSTEM ARCHITECTURE
+
+The system follows a microservices architecture with four primary components:
+
+2.1 Frontend Application
+Built with React 18 and TypeScript, the frontend provides a document-centric user interface. The layout uses a 65/35 split between the document view and query panel. Source highlighting is implemented using character offsets stored in the database, enabling precise visual connections between answers and their source passages.
+
+2.2 Backend API
+The FastAPI backend handles authentication, document processing, and query orchestration. It uses async/await throughout for non-blocking I/O operations. The API processes approximately 150 requests per minute during peak usage, with an average response time of 1.2 seconds for query operations.
+
+2.3 Database Layer
+PostgreSQL 16 with the pgvector extension serves as the primary data store. The database stores user accounts, document metadata, text chunks with character offsets, embedding vectors (384 dimensions), and query history. The schema uses UUID primary keys and cascading deletes to maintain referential integrity.
+
+2.4 AI Pipeline
+The embedding model (all-MiniLM-L6-v2) runs locally and generates 384-dimensional vectors for both document chunks and user queries. The LLM (Llama 3.3 70B) is accessed via the Groq API for inference. A budget management system tracks API usage across two model tiers to prevent rate limit exhaustion.
+
+3. DATA PROCESSING PIPELINE
+
+When a user uploads a document, the following steps occur:
+
+Step 1: File Validation - The system checks file type (PDF or TXT), size (maximum 20MB), and encoding.
+
+Step 2: Text Extraction - For PDFs, pdfplumber extracts text and tables page by page. Tables are converted to markdown format and treated as atomic chunks. Image-only PDFs (less than 50 characters per page average) are rejected with a clear error message.
+
+Step 3: Chunking - Text is split into chunks of approximately 512 tokens (~2048 characters) with 50-token overlap (~200 characters) using recursive character splitting. The separators hierarchy is: paragraph breaks, line breaks, sentence ends, and spaces. Each chunk records its page number and character offsets.
+
+Step 4: Embedding - Chunks are batch-encoded using the all-MiniLM-L6-v2 model with normalized embeddings. Processing takes approximately 50ms per chunk on CPU.
+
+Step 5: Storage - Chunks and their embeddings are bulk-inserted into the PostgreSQL database with an ivfflat index for cosine similarity search.
+
+4. QUERY PROCESSING
+
+When a user asks a question, the RAG pipeline executes:
+
+4.1 Query Enrichment
+If the question is short (fewer than 5 words) or contains pronouns without clear referents, the system prepends the previous question-answer pair to provide context for follow-up queries.
+
+4.2 Vector Search
+The question is embedded using the same model, and pgvector performs a cosine similarity search filtered by document_id. The top 5 chunks are retrieved.
+
+4.3 Relevance Gating
+If the highest similarity score is below 0.3 (on a 0-1 scale), the system skips the LLM entirely and returns "I couldn't find relevant information." This prevents hallucination on off-topic questions.
+
+4.4 Answer Generation
+Retrieved chunks are formatted as numbered sources and sent to the LLM with a system prompt that enforces source-only answers. The response includes source citations in [SOURCE N] format.
+
+5. SECURITY
+
+Authentication uses JWT tokens with bcrypt password hashing. Access tokens expire after 24 hours. All document and query endpoints verify user ownership before returning data. The database schema enforces row-level isolation through user_id foreign keys.
+
+Data deletion follows CASCADE rules: deleting a user account removes all associated documents, chunks (including vectors), and query history in a single atomic transaction.
+
+6. PERFORMANCE METRICS
+
+Current benchmarks on a standard development machine:
+- Document upload and processing: 2-15 seconds depending on document size
+- Query response time: 1.5-3.5 seconds (including embedding + retrieval + LLM)
+- Vector search latency: under 10ms for up to 10,000 chunks
+- Frontend initial load: 1.2 seconds
+- Memory usage: 450MB for the backend service (including embedding model)
+
+7. COST ANALYSIS
+
+Monthly infrastructure costs for a deployment serving 100 users:
+- PostgreSQL (managed): $25/month
+- Redis (managed): $15/month
+- API compute (2 vCPU): $35/month
+- Groq API (developer tier): $0 (free tier sufficient for 100 users)
+- Total: approximately $75/month
+
+For 10,000 users, the estimated monthly cost increases to $850, primarily driven by database scaling and compute requirements.
+
+8. KNOWN LIMITATIONS
+
+The current version does not support:
+- Optical Character Recognition (OCR) for scanned documents
+- Multi-document cross-referencing queries
+- Real-time streaming of LLM responses
+- Languages with right-to-left text direction
+
+These features are planned for version 3.0, with OCR support having the highest priority based on user feedback.
