@@ -28,6 +28,69 @@ bash samples/test-api.sh
 
 A sample document is included at `samples/sample-architecture.txt` for testing.
 
+## All Services & Ports
+
+| Port | Service | URL | Purpose |
+|---|---|---|---|
+| **5173** | Frontend | http://localhost:5173 | React app — main UI |
+| **8000** | Backend API | http://localhost:8000/docs | FastAPI with Swagger UI |
+| **8080** | Adminer | http://localhost:8080 | PostgreSQL browser — inspect tables, run queries |
+| **8081** | Redis Commander | http://localhost:8081 | Redis browser — view budget keys, embedding cache |
+| 5432 | PostgreSQL | (direct connection) | DB: `doclens` / user: `doclens` / pw: `doclens_secret` |
+| 6379 | Redis | (direct connection) | Cache + budget tracking |
+
+### Adminer Login (http://localhost:8080)
+
+```
+System:     PostgreSQL
+Server:     postgres
+Username:   doclens
+Password:   doclens_secret
+Database:   doclens
+```
+
+Once logged in, you can browse all tables: `users`, `documents`, `chunks`, `queries`. Click any table to see rows, run SQL queries, or export data.
+
+### Redis Commander (http://localhost:8081)
+
+View live Groq budget tracking keys:
+- `groq:rpd:llama-3.3-70b-versatile:2026-05-30` — primary model request count today
+- `groq:rpd:llama-3.1-8b-instant:2026-05-30` — fallback model request count today
+- `groq:last_request_ts` — timestamp of last LLM call (for TPM spacing)
+- `embed:*` — cached query embeddings (1-hour TTL)
+
+## Data Storage & Security
+
+### What's Stored Where
+
+| Data | Storage | Encrypted? | Notes |
+|---|---|---|---|
+| User passwords | `users.hashed_pw` | **Yes** (bcrypt) | Salted + hashed, not reversible |
+| User email | `users.email` | No (plaintext) | Indexed for login lookup |
+| Original PDF/TXT file | **Not stored** | N/A | Only extracted text is kept |
+| Extracted text | `documents.raw_text` | No (plaintext) | Needed for re-chunking without re-upload |
+| Chunk text | `chunks.content` | No (plaintext) | Needed for retrieval display + highlighting |
+| Embedding vectors | `chunks.embedding` | No (vector) | 384-dim floats, not human-readable |
+| Questions & answers | `queries` table | No (plaintext) | Audit trail for Q&A history |
+| JWT tokens | Client-side only | Signed (HMAC-SHA256) | Never stored in DB |
+
+### Security Model
+
+- **Authentication:** JWT with 24-hour expiry, bcrypt password hashing (cost factor 12)
+- **Authorization:** Every document/query endpoint verifies `user_id` ownership before returning data
+- **Data isolation:** Users can never access another user's documents, chunks, or queries
+- **Cascade deletes:** Deleting a user atomically removes all their data (documents, chunks, vectors, queries)
+- **No file storage:** Original uploaded files are processed in memory and discarded — only extracted text persists
+
+### Production Security (Not Implemented, Documented)
+
+In production, the following would be added:
+- PostgreSQL TDE (Transparent Data Encryption) for encryption at rest
+- TLS for all connections (API, database, Redis)
+- Short-lived access tokens (15 min) + refresh tokens (7 days)
+- Rate limiting per user (not just per Groq model)
+- Input sanitization beyond Pydantic validation
+
 ## Architecture
 
 ```
