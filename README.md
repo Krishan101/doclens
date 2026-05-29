@@ -164,9 +164,18 @@ See `.env.example` for the full list.
 
 ## Scalability Path
 
-**Local (now):** Docker Compose, 4 containers, single machine.
+**Local (now):** Docker Compose, 6 containers, single machine.
 
-**Production:** Postgres → RDS/Cloud SQL. Redis → ElastiCache. API → ECS Fargate (stateless, horizontal scaling). Document processing → Celery workers. Frontend → S3 + CloudFront. pgvector ivfflat → HNSW at 1M+ vectors.
+**Production scaling by tier:**
+
+| Scale | Changes |
+|---|---|
+| **1–100 users** | Current Docker Compose setup handles this fine |
+| **100–1K users** | Postgres → RDS/Cloud SQL, Redis → ElastiCache, API behind ALB, Celery for document processing |
+| **1K–10K users** | pgvector `ivfflat` → `HNSW` index, embedding model as separate service, frontend → S3 + CloudFront |
+| **10K+ users** | **pgvector → dedicated vector DB (Qdrant/Weaviate)** for advanced sharding, filtering, and multi-tenant isolation at 10M+ vectors. Partition chunks table by user/org. Groq → self-hosted vLLM on GPU instances |
+
+**Why pgvector now, Qdrant later:** pgvector keeps vectors as a native Postgres column with full relational integrity (`ON DELETE CASCADE`, foreign keys, transactions). At <1M vectors, query latency is under 10ms. A dedicated vector DB like Qdrant adds operational complexity (separate cluster, separate backups, distributed consistency) that's only justified at 10M+ vectors where you need horizontal sharding, advanced multi-vector search, or payload-based filtering beyond what SQL `WHERE` clauses offer.
 
 The API is stateless by design (JWT auth, no server sessions), so horizontal scaling requires only a load balancer.
 
@@ -176,6 +185,8 @@ The API is stateless by design (JWT auth, no server sessions), so horizontal sca
 - **No streaming** — Groq is fast enough (~2s responses) that a loading state works. Production would add SSE.
 - **Single document workspace** — Schema supports multi-doc; UI shows one at a time.
 - **24-hour JWT** — Production would use short-lived access tokens + refresh tokens.
+- **pgvector at scale** — At 10M+ vectors, would migrate to a dedicated vector DB (Qdrant or Weaviate) with a thin adapter layer. Schema is already structured for this (embeddings are isolated in the `chunks` table).
+- **Hybrid search** — Would add BM25 keyword search via Postgres full-text search and combine with vector similarity for better retrieval on exact terminology matches.
 
 ## Full Design Documentation
 
