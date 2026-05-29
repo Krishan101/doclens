@@ -1,8 +1,10 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text as sa_text
 
 from app.config import get_settings
 from app.dependencies import engine, get_redis, get_embedding_model
@@ -21,7 +23,7 @@ async def lifespan(app: FastAPI):
 
     # Create tables (for dev — production uses Alembic)
     async with engine.begin() as conn:
-        await conn.execute(__import__("sqlalchemy").text("CREATE EXTENSION IF NOT EXISTS vector"))
+        await conn.execute(sa_text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables ready")
 
@@ -44,6 +46,16 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+# Global exception handler — no raw 500s reach the frontend
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled error on {request.method} {request.url.path}: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An internal error occurred. Please try again."},
+    )
 
 # CORS
 origins = [o.strip() for o in settings.backend_cors_origins.split(",")]
@@ -68,7 +80,7 @@ async def health():
     # Postgres
     try:
         async with engine.begin() as conn:
-            await conn.execute(__import__("sqlalchemy").text("SELECT 1"))
+            await conn.execute(sa_text("SELECT 1"))
         checks["postgres"] = True
     except Exception:
         pass

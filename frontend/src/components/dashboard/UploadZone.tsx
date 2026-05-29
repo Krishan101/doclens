@@ -1,23 +1,35 @@
 import { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Upload, FileText, AlertCircle } from 'lucide-react';
 import { useUploadDocument } from '../../hooks/useDocuments';
 
 export default function UploadZone() {
   const [dragActive, setDragActive] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const navigate = useNavigate();
   const upload = useUploadDocument();
 
   const handleFile = useCallback((file: File) => {
+    setErrorMsg('');
     const ext = file.name.split('.').pop()?.toLowerCase();
     if (!['pdf', 'txt'].includes(ext || '')) {
-      alert('Only PDF and TXT files are supported.');
+      setErrorMsg('Only PDF and TXT files are supported.');
       return;
     }
     if (file.size > 20 * 1024 * 1024) {
-      alert('File too large. Maximum 20MB.');
+      setErrorMsg('File too large. Maximum 20MB.');
       return;
     }
-    upload.mutate(file);
-  }, [upload]);
+    upload.mutate(file, {
+      onSuccess: (doc) => {
+        // Navigate to workspace — it will show processing state
+        navigate(`/doc/${doc.id}`);
+      },
+      onError: (err: any) => {
+        setErrorMsg(err.response?.data?.detail || 'Upload failed. Please try again.');
+      },
+    });
+  }, [upload, navigate]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -49,10 +61,10 @@ export default function UploadZone() {
           <div className="w-8 h-8 border-2 border-stone-300 border-t-accent-500 rounded-full animate-spin" />
           <p className="text-sm text-stone-600">Uploading...</p>
         </div>
-      ) : upload.isError ? (
+      ) : errorMsg || upload.isError ? (
         <div className="flex flex-col items-center gap-2">
           <AlertCircle className="w-8 h-8 text-red-400" />
-          <p className="text-sm text-red-600">Upload failed. Try again.</p>
+          <p className="text-sm text-red-600">{errorMsg || 'Upload failed. Try again.'}</p>
         </div>
       ) : (
         <div className="flex flex-col items-center gap-2">

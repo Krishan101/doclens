@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, FileText, FileSearch } from 'lucide-react';
 import type { Document } from '../../types';
+import BudgetIndicator from './BudgetIndicator';
 
 export default function WorkspaceHeader({ doc }: { doc: Document }) {
   const navigate = useNavigate();
@@ -20,9 +21,12 @@ export default function WorkspaceHeader({ doc }: { doc: Document }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-3 text-xs text-stone-500">
-        {doc.page_count && <span>{doc.page_count} pages</span>}
-        {doc.chunk_count != null && <span>{doc.chunk_count} chunks</span>}
+      <div className="flex items-center gap-4">
+        <BudgetIndicator />
+        <div className="flex items-center gap-3 text-xs text-stone-500">
+          {doc.page_count && <span>{doc.page_count} pages</span>}
+          {doc.chunk_count != null && <span>{doc.chunk_count} chunks</span>}
+        </div>
       </div>
     </header>
   );

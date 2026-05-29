@@ -1,4 +1,5 @@
 import time
+import asyncio
 import logging
 from groq import AsyncGroq, RateLimitError, APITimeoutError, APIError
 import redis.asyncio as aioredis
@@ -87,7 +88,7 @@ class LLMService:
             logger.warning(f"Groq rate limit hit: {e}")
             # Try once more after a short delay
             try:
-                await __import__("asyncio").sleep(3)
+                await asyncio.sleep(3)
                 response = await self.client.chat.completions.create(
                     model=self.budget.fallback,  # Use fallback model on retry
                     messages=[

@@ -17,7 +17,7 @@ def chunk_text(
     tables: list[dict],
     chunk_size: int = 2048,      # ~512 tokens in chars
     chunk_overlap: int = 200,     # ~50 tokens in chars
-    page_breaks: list[int] | None = None,
+    page_offsets: list[int] | None = None,
 ) -> list[ChunkData]:
     """
     Split document text into chunks with character offsets.
@@ -34,8 +34,6 @@ def chunk_text(
             continue
         table_texts_added.add(content)
 
-        # Find table position in raw text (approximate)
-        # Tables might not appear verbatim in raw_text, so we use page info
         chunks.append(ChunkData(
             content=content,
             chunk_type="table",
@@ -58,8 +56,8 @@ def chunk_text(
         if not text.strip():
             continue
 
-        # Estimate page number from character position
-        page_num = _estimate_page(start, raw_text)
+        # Determine page number from offsets
+        page_num = _get_page_number(start, page_offsets)
 
         chunks.append(ChunkData(
             content=text.strip(),
@@ -121,9 +119,16 @@ def _recursive_split(
     return results
 
 
-def _estimate_page(char_pos: int, raw_text: str) -> int:
-    """Estimate page number from character position (pages separated by double newlines)."""
-    # Simple heuristic: count double-newline-separated blocks before this position
-    prefix = raw_text[:char_pos]
-    pages = prefix.count("\n\n") // 3 + 1  # rough: ~3 paragraphs per page
-    return max(1, pages)
+def _get_page_number(char_pos: int, page_offsets: list[int] | None) -> int:
+    """Get page number from character position using actual page boundaries."""
+    if not page_offsets:
+        return 1
+
+    # Binary search for the page containing this position
+    page = 1
+    for i, offset in enumerate(page_offsets):
+        if char_pos >= offset:
+            page = i + 1
+        else:
+            break
+    return page

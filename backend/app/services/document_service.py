@@ -80,7 +80,7 @@ async def process_document(
         doc.page_count = extraction.page_count
 
         # 4. Chunk
-        chunks = chunk_text(extraction.raw_text, extraction.tables)
+        chunks = chunk_text(extraction.raw_text, extraction.tables, page_offsets=extraction.page_offsets)
         if not chunks:
             doc.status = "empty"
             doc.error_msg = "Document produced no usable text chunks."
