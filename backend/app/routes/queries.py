@@ -43,6 +43,26 @@ async def get_query_history(
     return await query_service.get_query_history(db, UUID(user_id), document_id)
 
 
+@router.get("/documents/{document_id}/suggestions")
+async def get_suggested_questions(
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+    redis_client: aioredis.Redis = Depends(get_redis),
+):
+    """Generate smart suggested questions based on document content."""
+    try:
+        suggestions = await query_service.generate_suggestions(
+            db=db,
+            user_id=UUID(user_id),
+            document_id=document_id,
+            redis_client=redis_client,
+        )
+        return {"suggestions": suggestions}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/budget", response_model=BudgetResponse)
 async def get_budget(
     redis_client: aioredis.Redis = Depends(get_redis),

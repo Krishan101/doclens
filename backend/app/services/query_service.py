@@ -147,6 +147,101 @@ async def get_query_history(
     ]
 
 
+async def generate_suggestions(
+    db: AsyncSession,
+    user_id: UUID,
+    document_id: UUID,
+    redis_client: aioredis.Redis,
+) -> list[str]:
+    """Generate 4 smart suggested questions from document content."""
+    # Check Redis cache first
+    cache_key = f"suggestions:{document_id}"
+    try:
+        cached = await redis_client.get(cache_key)
+        if cached:
+            import json
+            return json.loads(cached)
+    except Exception:
+        pass
+
+    # Verify ownership
+    result = await db.execute(
+        select(Document).where(Document.id == document_id, Document.user_id == user_id)
+    )
+    doc = result.scalar_one_or_none()
+    if not doc or doc.status != "ready":
+        raise ValueError("Document not found or not ready")
+
+    # Get first few chunks for context
+    result = await db.execute(
+        select(Chunk)
+        .where(Chunk.document_id == document_id)
+        .order_by(Chunk.chunk_index)
+        .limit(4)
+    )
+    chunks = result.scalars().all()
+    if not chunks:
+        return []
+
+    context = "\n\n".join([c.content for c in chunks])
+
+    # Ask the LLM to generate questions
+    llm = LLMService(redis_client)
+    suggestion_prompt = f"""Based on this document content, generate exactly 4 insightful questions that a reader would want to ask. The questions should:
+- Cover different aspects of the document (facts, analysis, comparisons, implications)
+- Range from specific ("What is X?") to analytical ("How does X compare to Y?")
+- Be answerable from the document content
+
+Document content:
+{context[:2000]}
+
+Return ONLY the 4 questions, one per line, numbered 1-4. No other text."""
+
+    try:
+        model = await llm.budget.select_model()
+        await llm.budget.pre_request_throttle()
+
+        response = await llm.client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": suggestion_prompt}],
+            temperature=0.7,
+            max_tokens=300,
+        )
+
+        usage = response.usage
+        await llm.budget.record_usage(
+            model=model,
+            prompt_tokens=usage.prompt_tokens if usage else 0,
+            completion_tokens=usage.completion_tokens if usage else 0,
+        )
+
+        raw = response.choices[0].message.content
+        # Parse numbered lines
+        questions = []
+        for line in raw.strip().split("\n"):
+            line = line.strip()
+            if line and line[0].isdigit():
+                # Remove numbering like "1. " or "1) "
+                q = line.lstrip("0123456789.)- ").strip()
+                if q and len(q) > 10:
+                    questions.append(q)
+
+        suggestions = questions[:4]
+
+        # Cache for 1 hour
+        try:
+            import json
+            await redis_client.set(cache_key, json.dumps(suggestions), ex=3600)
+        except Exception:
+            pass
+
+        return suggestions
+
+    except Exception as e:
+        logger.error(f"Failed to generate suggestions: {e}")
+        return []
+
+
 async def _enrich_query(
     db: AsyncSession,
     user_id: UUID,

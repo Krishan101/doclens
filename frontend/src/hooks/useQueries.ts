@@ -27,6 +27,19 @@ export function useQueryHistory(documentId: string | undefined) {
   });
 }
 
+export function useSuggestions(documentId: string | undefined) {
+  return useQuery<{ suggestions: string[] }>({
+    queryKey: ['suggestions', documentId],
+    queryFn: async () => {
+      const res = await api.get(`/documents/${documentId}/suggestions`);
+      return res.data;
+    },
+    enabled: !!documentId,
+    staleTime: 1000 * 60 * 30, // cache for 30 min
+    retry: 1,
+  });
+}
+
 export function useBudget() {
   return useQuery<BudgetStatus>({
     queryKey: ['budget'],

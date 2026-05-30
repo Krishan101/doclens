@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Search } from 'lucide-react';
-import { useAskQuestion, useQueryHistory } from '../../hooks/useQueries';
+import { Search, Sparkles, Loader2 } from 'lucide-react';
+import { useAskQuestion, useQueryHistory, useSuggestions } from '../../hooks/useQueries';
 import { useHighlight } from '../../context/HighlightContext';
 import type { QueryResult } from '../../types';
 import QueryInput from './QueryInput';
@@ -16,6 +16,7 @@ export default function QueryPanel({ documentId }: QueryPanelProps) {
   const [activeResult, setActiveResult] = useState<QueryResult | null>(null);
   const askQuestion = useAskQuestion();
   const { data: history } = useQueryHistory(documentId);
+  const { data: suggestionsData, isLoading: suggestionsLoading } = useSuggestions(documentId);
   const { setHighlights, clearHighlights } = useHighlight();
 
   const handleAsk = (question: string) => {
@@ -27,13 +28,15 @@ export default function QueryPanel({ documentId }: QueryPanelProps) {
       {
         onSuccess: (result) => {
           setActiveResult(result);
-          // Highlight source chunks in the document view with keyword matching
           const chunkIds = result.sources.map((s) => s.chunk_id);
           setHighlights(chunkIds, question);
         },
       }
     );
   };
+
+  const suggestions = suggestionsData?.suggestions || [];
+  const showSuggestions = !activeResult && !askQuestion.isPending && suggestions.length > 0;
 
   return (
     <div className="h-full flex flex-col bg-stone-50 border-l border-stone-200">
@@ -64,11 +67,41 @@ export default function QueryPanel({ documentId }: QueryPanelProps) {
 
         {activeResult && <ActiveAnswer result={activeResult} />}
 
-        {!activeResult && !askQuestion.isPending && (!history || history.length === 0) && (
+        {/* Suggested questions */}
+        {showSuggestions && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-stone-500 uppercase tracking-wide">
+              <Sparkles className="w-3.5 h-3.5" />
+              Suggested Questions
+            </div>
+            <div className="space-y-2">
+              {suggestions.map((q, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleAsk(q)}
+                  className="w-full text-left px-3 py-2.5 bg-white border border-stone-200 rounded-lg
+                    text-sm text-stone-700 hover:border-amber-300 hover:bg-amber-50
+                    transition-colors cursor-pointer"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {suggestionsLoading && !activeResult && (
+          <div className="flex items-center gap-2 text-xs text-stone-400 py-4 justify-center">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            Generating suggested questions...
+          </div>
+        )}
+
+        {!showSuggestions && !activeResult && !askQuestion.isPending && !suggestionsLoading && suggestions.length === 0 && (
           <EmptyState
             icon={<Search className="w-10 h-10" />}
-            title="Ask your first question"
-            description="Type a question about this document and get an AI-generated answer with source references."
+            title="Ask about this document"
+            description="Type a question to get an AI-generated answer grounded in the document content."
           />
         )}
 
