@@ -81,11 +81,11 @@ async def ask_question(
     # 5. Trim context to token budget
     trimmed_chunks = _trim_to_budget(retrieved, settings.max_context_tokens)
 
-    # 6. Determine confidence
+    # 6. Determine confidence (calibrated for all-MiniLM-L6-v2 scores)
     top_similarity = trimmed_chunks[0]["similarity"]
-    if top_similarity > 0.5:
+    if top_similarity > 0.25:
         confidence = "high"
-    elif top_similarity > 0.3:
+    elif top_similarity > 0.1:
         confidence = "low"
     else:
         confidence = "none"
