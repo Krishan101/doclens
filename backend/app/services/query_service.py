@@ -181,10 +181,10 @@ async def _vector_search(
 
     sql = text("""
         SELECT id, content, chunk_type, page_number, char_start, char_end,
-               1 - (embedding <=> :embedding::vector) AS similarity
+               1 - (embedding <=> CAST(:embedding AS vector)) AS similarity
         FROM chunks
-        WHERE document_id = :doc_id
-        ORDER BY embedding <=> :embedding::vector
+        WHERE document_id = CAST(:doc_id AS uuid)
+        ORDER BY embedding <=> CAST(:embedding AS vector)
         LIMIT :limit
     """)
 
