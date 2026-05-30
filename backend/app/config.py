@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     # RAG
     max_context_tokens: int = 2000
     max_completion_tokens: int = 512
-    relevance_threshold: float = 0.15
+    relevance_threshold: float = 0.05
 
     # Upload
     max_upload_size_mb: int = 20
