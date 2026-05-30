@@ -1,7 +1,20 @@
 import time
 import asyncio
 import logging
-from groq import AsyncGroq, RateLimitError, APITimeoutError, APIError
+
+from groq import AsyncGroq
+
+# Error classes vary across groq SDK versions — import defensively
+try:
+    from groq import RateLimitError, APITimeoutError, APIError
+except ImportError:
+    try:
+        from groq._exceptions import RateLimitError, APITimeoutError, APIError
+    except ImportError:
+        RateLimitError = Exception
+        APITimeoutError = TimeoutError
+        APIError = Exception
+
 import redis.asyncio as aioredis
 
 from app.config import get_settings
