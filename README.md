@@ -179,15 +179,48 @@ See `.env.example` for the full list.
 
 The API is stateless by design (JWT auth, no server sessions), so horizontal scaling requires only a load balancer.
 
-## Known Limitations & Future Work
+## What Was Achieved
 
-- **No OCR** — Image-only PDFs are detected and rejected with a clear message. Production would add Tesseract.
-- **No streaming** — Groq is fast enough (~2s responses) that a loading state works. Production would add SSE.
-- **Single document workspace** — Schema supports multi-doc; UI shows one at a time.
-- **24-hour JWT** — Production would use short-lived access tokens + refresh tokens.
-- **pgvector at scale** — At 10M+ vectors, would migrate to a dedicated vector DB (Qdrant or Weaviate) with a thin adapter layer. Schema is already structured for this (embeddings are isolated in the `chunks` table).
-- **Hybrid search** — Would add BM25 keyword search via Postgres full-text search and combine with vector similarity for better retrieval on exact terminology matches.
+**Core RAG Pipeline (fully functional):**
+- End-to-end document upload → text extraction → chunking → embedding → vector storage → retrieval → LLM answer
+- PDF support with pdfplumber (table extraction, image-only detection, page boundary tracking)
+- pgvector similarity search filtered by document, with relevance threshold gating
+- Grounded answers via Groq (Llama 3.3 70B) with [SOURCE N] citations parsed and linked to UI
+
+**Intelligent Features:**
+- AI-generated suggested questions — the app analyzes uploaded documents and proposes 4 insightful questions
+- Vague query enrichment — follow-up questions like "tell me more" automatically include prior Q&A context
+- Dual-model Groq budget manager — tracks RPD per model in Redis, auto-switches from 70B → 8B when primary is exhausted, giving ~1,900 usable requests/day on free tier
+- Source highlighting — answers reference specific chunks, clicking source pills scrolls the document view
+
+**Production-Minded Design:**
+- JWT authentication with bcrypt, user-scoped data isolation, `ON DELETE CASCADE` across all tables
+- Background document processing (202 Accepted + polling) — large PDFs don't block the UI
+- Global exception handler — no raw 500 errors reach the frontend
+- Redis caching for embeddings (1hr TTL) and suggested questions
+- All empty/error states designed (no white screens or raw JSON errors)
+- Health endpoint checking Postgres, Redis, and embedding model status
+- Admin tools: Adminer (DB browser), Redis Commander (cache viewer)
+
+**Architecture & Code Quality:**
+- Clean route → service → repository separation (no business logic in handlers)
+- Typed Pydantic models for every request/response
+- Async throughout (SQLAlchemy async, asyncpg, aioredis)
+- Docker Compose with 6 containers, one-command startup
+
+## What I'd Add Next (Future Improvements)
+
+| Priority | Feature | Why It Matters |
+|---|---|---|
+| **High** | **Hybrid search (BM25 + vector)** | Pure vector search misses exact keyword matches. Combining Postgres full-text search with pgvector similarity would improve retrieval precision by 20-30%. |
+| **High** | **OCR support (Tesseract)** | Image-only PDFs are currently rejected. Adding OCR opens the app to scanned contracts, receipts, and legacy documents. |
+| **High** | **Evaluation harness** | Automated test suite with question-answer pairs to measure retrieval recall and answer faithfulness. Currently quality assessment is manual. |
+| **Medium** | **Streaming responses (SSE)** | For longer answers, streaming gives better perceived performance. Groq's ~300 tok/s makes this less critical but still a UX improvement. |
+| **Medium** | **Multi-document workspace** | Schema already supports multiple documents per user. UI would add a document switcher and cross-document queries. |
+| **Medium** | **Dedicated vector DB at scale** | Migrate from pgvector to Qdrant/Weaviate at 10M+ vectors for horizontal sharding and advanced filtering. |
+| **Low** | **Refresh token flow** | Replace 24-hour access tokens with short-lived (15min) access + 7-day refresh tokens. |
+| **Low** | **Document structure awareness** | Detect headings, sections, and lists during chunking for more semantically meaningful splits instead of fixed-size. |
 
 ## Full Design Documentation
 
-See [BLUEPRINT.md](./BLUEPRINT.md) for the complete system design, schema, RAG pipeline details, edge case analysis, and interview talking points.
+See [BLUEPRINT.md](./BLUEPRINT.md) for the complete system design, database schema, RAG pipeline details, edge case analysis, scalability path, and interview talking points.
