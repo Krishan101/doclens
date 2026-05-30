@@ -15,8 +15,8 @@ class ChunkData:
 def chunk_text(
     raw_text: str,
     tables: list[dict],
-    chunk_size: int = 2048,      # ~512 tokens in chars
-    chunk_overlap: int = 200,     # ~50 tokens in chars
+    chunk_size: int = 1000,       # ~250 tokens — smaller chunks embed more precisely
+    chunk_overlap: int = 150,     # ~40 tokens overlap
     page_offsets: list[int] | None = None,
 ) -> list[ChunkData]:
     """
