@@ -231,8 +231,27 @@ def _trim_to_budget(chunks: list[dict], max_tokens: int) -> list[dict]:
     return trimmed
 
 
+import re
+
+
+def _parse_cited_sources(answer: str) -> set[int]:
+    """Extract [SOURCE N] references from the LLM answer."""
+    matches = re.findall(r'\[SOURCE\s*(\d+)\]', answer, re.IGNORECASE)
+    return {int(m) for m in matches}
+
+
 def _format_response(query: Query, sources: list[dict], budget: dict) -> dict:
-    """Format the final response."""
+    """Format the final response, only including sources actually cited by the LLM."""
+    # Parse which sources the LLM actually referenced
+    cited_indices = _parse_cited_sources(query.answer)
+
+    # Filter: only include cited sources (1-indexed), fall back to all if none parsed
+    if cited_indices:
+        filtered_sources = [s for i, s in enumerate(sources) if (i + 1) in cited_indices]
+    else:
+        # LLM didn't use [SOURCE N] format — include top source only
+        filtered_sources = sources[:1] if sources else []
+
     return {
         "id": query.id,
         "question": query.question,
@@ -248,7 +267,7 @@ def _format_response(query: Query, sources: list[dict], budget: dict) -> dict:
                 "char_end": s["char_end"],
                 "similarity": s["similarity"],
             }
-            for s in sources
+            for s in filtered_sources
         ],
         "latency_ms": query.latency_ms,
         "model_used": query.llm_model,
