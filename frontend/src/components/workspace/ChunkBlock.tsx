@@ -19,6 +19,7 @@ const STOP_WORDS = new Set([
   'it', 'its', 'this', 'that', 'these', 'those', 'what', 'which',
   'who', 'whom', 'how', 'when', 'where', 'why', 'i', 'me', 'my',
   'we', 'our', 'you', 'your', 'he', 'she', 'they', 'them', 'their',
+  'tell', 'much', 'many', 'total', 'type', 'kind', 'does',
 ]);
 
 function extractKeywords(query: string): string[] {
@@ -32,15 +33,17 @@ function extractKeywords(query: string): string[] {
 function highlightText(content: string, keywords: string[]): React.ReactNode[] {
   if (keywords.length === 0) return [content];
 
-  // Build regex matching any keyword (case-insensitive)
-  const pattern = new RegExp(`(${keywords.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'gi');
+  const pattern = new RegExp(
+    `(${keywords.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`,
+    'gi'
+  );
   const parts = content.split(pattern);
 
   return parts.map((part, i) => {
     const isMatch = keywords.some(k => part.toLowerCase() === k.toLowerCase());
     if (isMatch) {
       return (
-        <mark key={i} className="bg-accent-300 text-stone-900 rounded-sm px-0.5">
+        <mark key={i} className="bg-amber-300 text-stone-900 rounded-sm px-0.5 py-0.5 font-medium">
           {part}
         </mark>
       );
@@ -68,8 +71,8 @@ export default function ChunkBlock({ id, content, chunkType }: ChunkBlockProps) 
     <div
       id={`chunk-${id}`}
       className={`relative py-2 px-3 rounded-lg transition-all duration-300
-        ${isHighlighted ? 'bg-accent-50 border-l-[3px] border-l-accent-500' : 'border-l-[3px] border-l-transparent'}
-        ${isActive ? 'animate-highlight-pulse ring-2 ring-accent-300' : ''}
+        ${isHighlighted ? 'border-l-[3px] border-l-amber-500 bg-white' : 'border-l-[3px] border-l-transparent'}
+        ${isActive ? 'animate-highlight-pulse ring-2 ring-amber-300' : ''}
       `}
     >
       {chunkType === 'table' ? (
