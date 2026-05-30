@@ -46,6 +46,13 @@ async def ask_question(
     # 3. Vector similarity search
     retrieved = await _vector_search(db, document_id, query_embedding, limit=5)
 
+    # Debug: log similarity scores
+    if retrieved:
+        scores = [(r["similarity"], r["content"][:60]) for r in retrieved]
+        logger.info(f"Query: '{question}' | Top scores: {[(s, c) for s, c in scores]}")
+    else:
+        logger.info(f"Query: '{question}' | No chunks retrieved")
+
     # 4. Relevance gate
     if not retrieved or retrieved[0]["similarity"] < settings.relevance_threshold:
         # No good matches — don't call LLM
