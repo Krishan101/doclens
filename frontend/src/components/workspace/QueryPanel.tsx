@@ -27,9 +27,9 @@ export default function QueryPanel({ documentId }: QueryPanelProps) {
       {
         onSuccess: (result) => {
           setActiveResult(result);
-          // Highlight source chunks in the document view
+          // Highlight source chunks in the document view with keyword matching
           const chunkIds = result.sources.map((s) => s.chunk_id);
-          setHighlights(chunkIds);
+          setHighlights(chunkIds, question);
         },
       }
     );

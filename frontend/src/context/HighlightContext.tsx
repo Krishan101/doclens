@@ -3,7 +3,8 @@ import { createContext, useContext, useState, useCallback, ReactNode } from 'rea
 interface HighlightContextType {
   highlightedChunkIds: Set<string>;
   activeChunkId: string | null;
-  setHighlights: (chunkIds: string[]) => void;
+  searchQuery: string;
+  setHighlights: (chunkIds: string[], query: string) => void;
   scrollToChunk: (chunkId: string) => void;
   clearHighlights: () => void;
 }
@@ -13,9 +14,11 @@ const HighlightContext = createContext<HighlightContextType | null>(null);
 export function HighlightProvider({ children }: { children: ReactNode }) {
   const [highlightedChunkIds, setHighlightedChunkIds] = useState<Set<string>>(new Set());
   const [activeChunkId, setActiveChunkId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
-  const setHighlights = useCallback((chunkIds: string[]) => {
+  const setHighlights = useCallback((chunkIds: string[], query: string) => {
     setHighlightedChunkIds(new Set(chunkIds));
+    setSearchQuery(query);
     setActiveChunkId(null);
   }, []);
 
@@ -30,10 +33,11 @@ export function HighlightProvider({ children }: { children: ReactNode }) {
   const clearHighlights = useCallback(() => {
     setHighlightedChunkIds(new Set());
     setActiveChunkId(null);
+    setSearchQuery('');
   }, []);
 
   return (
-    <HighlightContext.Provider value={{ highlightedChunkIds, activeChunkId, setHighlights, scrollToChunk, clearHighlights }}>
+    <HighlightContext.Provider value={{ highlightedChunkIds, activeChunkId, searchQuery, setHighlights, scrollToChunk, clearHighlights }}>
       {children}
     </HighlightContext.Provider>
   );
