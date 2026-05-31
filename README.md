@@ -59,6 +59,38 @@ View live Groq budget tracking keys:
 - `groq:last_request_ts` — timestamp of last LLM call (for TPM spacing)
 - `embed:*` — cached query embeddings (1-hour TTL)
 
+## Technology Choices & Rationale
+
+### Development Approach: AI-Assisted
+
+This project was built with AI assistance (Claude) for architecture planning, code generation, and iterative debugging. The system design, architectural decisions, and all technical tradeoffs were evaluated and validated by me. AI assistance accelerated implementation of boilerplate (Docker configs, auth plumbing, component scaffolding) while I focused on RAG pipeline quality, prompt engineering, and UX decisions. Every line of code was reviewed and understood before committing.
+
+### LLM Choice: Groq Free Tier (Llama 3.3 70B)
+
+| Option Considered | Decision | Reasoning |
+|---|---|---|
+| OpenAI (GPT-4) | ❌ Rejected | Requires paid API key. The assignment should run without cost barriers for the reviewer. |
+| Anthropic (Claude API) | ❌ Rejected | Same — paid API. Also creates a dependency on a single provider. |
+| HuggingFace Inference | ❌ Rejected | Slow cold starts, inconsistent availability, poor developer experience. |
+| Ollama (local) | ✅ Documented as fallback | Fully offline, but limited to small models (3B) on CPU — significantly worse answer quality for RAG synthesis. |
+| **Groq Free Tier** | **✅ Chosen** | Free, fast (~300 tok/s), access to Llama 3.3 70B (the best open-weight model). Dual-model budget management (70B + 8B) gives ~1,900 requests/day. Rate limits handled with a custom budget manager in Redis. |
+
+### Embedding Model: all-MiniLM-L6-v2 (Local)
+
+Runs locally inside the Docker container — no API calls, no cost, no rate limits. 384-dimensional embeddings, ~80MB model size, ~50ms per chunk on CPU. Chosen over larger models (e5-large, BGE) because the marginal quality gain doesn't justify 4x inference time for a document QA application at this scale.
+
+### Deployment: Docker Compose (Local)
+
+| Option | Decision | Reasoning |
+|---|---|---|
+| Cloud (AWS/Render/Railway) | ❌ Deferred | Free tiers have cold starts (30-60s) that would degrade the demo experience. Risk of service sleeping mid-review. |
+| **Docker Compose (local)** | **✅ Chosen** | One-command startup (`docker compose up`), deterministic environment, no cloud account needed. The reviewer clones, adds a Groq key, and runs — under 5 minutes to a working app. |
+| Production cloud path | ✅ Documented | Full scaling architecture documented in the Scalability section (Docker Compose → K8s with managed Postgres, ElastiCache, ALB, auto-scaling). |
+
+### Database: PostgreSQL + pgvector (not a dedicated vector DB)
+
+Vectors live as a native column alongside relational data — users, documents, chunks, queries — in a single database with full referential integrity. `ON DELETE CASCADE` removes a user's vectors atomically when their account is deleted. No distributed transactions, no eventual consistency. At <1M vectors, pgvector queries are under 10ms. Migration to Qdrant/Weaviate is documented as the path at 10M+ vectors.
+
 ## Data Storage & Security
 
 ### What's Stored Where
