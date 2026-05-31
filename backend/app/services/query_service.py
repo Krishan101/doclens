@@ -48,13 +48,14 @@ async def ask_question(
 
     # Debug: log similarity scores
     if retrieved:
-        scores = [(r["similarity"], r["content"][:60]) for r in retrieved]
-        logger.info(f"Query: '{question}' | Top scores: {scores}")
+        scores = [(r.get("cosine_score", r["similarity"]), r["content"][:60]) for r in retrieved]
+        logger.info(f"Query: '{question}' | Top cosine scores: {scores}")
     else:
         logger.info(f"Query: '{question}' | No chunks retrieved")
 
-    # 4. Relevance gate
-    if not retrieved or retrieved[0]["similarity"] < settings.relevance_threshold:
+    # 4. Relevance gate (use cosine_score for gating, RRF for ranking)
+    gate_score = retrieved[0].get("cosine_score", retrieved[0]["similarity"]) if retrieved else 0
+    if not retrieved or gate_score < settings.relevance_threshold:
         confidence = "none"
         answer = "I couldn't find relevant information in the document for this question. Try rephrasing or asking about a specific topic covered in the document."
         query_record = await query_repo.create(
@@ -77,11 +78,11 @@ async def ask_question(
     # 5. Trim context to token budget
     trimmed_chunks = _trim_to_budget(retrieved, settings.max_context_tokens)
 
-    # 6. Determine confidence (calibrated for all-MiniLM-L6-v2)
-    top_similarity = trimmed_chunks[0]["similarity"]
-    if top_similarity > 0.25:
+    # 6. Determine confidence (using cosine_score, calibrated for all-MiniLM-L6-v2)
+    top_cosine = trimmed_chunks[0].get("cosine_score", trimmed_chunks[0]["similarity"])
+    if top_cosine > 0.25:
         confidence = "high"
-    elif top_similarity > 0.1:
+    elif top_cosine > 0.1:
         confidence = "low"
     else:
         confidence = "none"
@@ -138,8 +139,9 @@ async def ask_question_stream(
     # Retrieve
     retrieved = await chunk_repo.hybrid_search(db, document_id, query_embedding, question, limit=5)
 
-    # Relevance gate
-    if not retrieved or retrieved[0]["similarity"] < settings.relevance_threshold:
+    # Relevance gate (use cosine_score, not RRF score)
+    gate_score = retrieved[0].get("cosine_score", retrieved[0]["similarity"]) if retrieved else 0
+    if not retrieved or gate_score < settings.relevance_threshold:
         yield {
             "type": "sources",
             "sources": [],
@@ -154,8 +156,8 @@ async def ask_question_stream(
         return
 
     trimmed = _trim_to_budget(retrieved, settings.max_context_tokens)
-    top_sim = trimmed[0]["similarity"]
-    confidence = "high" if top_sim > 0.25 else "low" if top_sim > 0.1 else "none"
+    top_cosine = trimmed[0].get("cosine_score", trimmed[0]["similarity"])
+    confidence = "high" if top_cosine > 0.25 else "low" if top_cosine > 0.1 else "none"
 
     # Emit sources first (before answer starts)
     yield {
