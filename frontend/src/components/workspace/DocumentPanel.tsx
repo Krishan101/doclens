@@ -9,11 +9,6 @@ interface DocumentPanelProps {
   isLoading: boolean;
 }
 
-/**
- * Remove overlapping text between adjacent chunks.
- * Chunks have ~150 char overlap from the chunking algorithm.
- * We trim the overlapping prefix from each chunk after the first.
- */
 function deduplicateChunks(chunks: Chunk[]): (Chunk & { displayContent: string })[] {
   if (chunks.length === 0) return [];
 
@@ -25,13 +20,11 @@ function deduplicateChunks(chunks: Chunk[]): (Chunk & { displayContent: string }
     const prev = chunks[i - 1];
     const curr = chunks[i];
 
-    // Skip table chunks — no overlap dedup needed
     if (curr.chunk_type === 'table' || prev.chunk_type === 'table') {
       result.push({ ...curr, displayContent: curr.content });
       continue;
     }
 
-    // Find overlap: check if start of current matches end of previous
     let overlapLen = 0;
     const maxOverlap = Math.min(200, prev.content.length, curr.content.length);
 
@@ -55,6 +48,12 @@ function deduplicateChunks(chunks: Chunk[]): (Chunk & { displayContent: string }
 }
 
 export default function DocumentPanel({ chunks, isLoading }: DocumentPanelProps) {
+  // useMemo MUST be called before any conditional returns (React hooks rule)
+  const dedupedChunks = useMemo(
+    () => (chunks && chunks.length > 0 ? deduplicateChunks(chunks) : []),
+    [chunks]
+  );
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -67,8 +66,6 @@ export default function DocumentPanel({ chunks, isLoading }: DocumentPanelProps)
     return <EmptyState title="No content" description="This document has no extractable text." />;
   }
 
-  const dedupedChunks = useMemo(() => deduplicateChunks(chunks), [chunks]);
-
   let currentPage: number | null = null;
 
   return (
@@ -77,7 +74,6 @@ export default function DocumentPanel({ chunks, isLoading }: DocumentPanelProps)
         const showPageBreak = chunk.page_number !== currentPage && chunk.page_number != null;
         currentPage = chunk.page_number;
 
-        // Skip chunks that became empty after dedup
         if (!chunk.displayContent.trim()) return null;
 
         return (
