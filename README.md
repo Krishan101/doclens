@@ -129,6 +129,7 @@ In production, the following would be added:
 | Frontend | React 18 + Vite + TypeScript + Tailwind CSS |
 | Backend | FastAPI + Python 3.11 |
 | Database | PostgreSQL 16 + pgvector |
+| Search | Hybrid: pgvector cosine + BM25 full-text via Reciprocal Rank Fusion |
 | Embeddings | all-MiniLM-L6-v2 (local, 384-dim) |
 | LLM | Llama 3.3 70B + 3.1 8B via Groq free tier |
 | Auth | JWT (python-jose + passlib) |
@@ -189,9 +190,12 @@ The API is stateless by design (JWT auth, no server sessions), so horizontal sca
 
 **Intelligent Features:**
 - AI-generated suggested questions — the app analyzes uploaded documents and proposes 4 insightful questions
+- Hybrid search (BM25 + vector) — combines Postgres full-text search with pgvector cosine similarity via Reciprocal Rank Fusion for better retrieval precision
+- Streaming responses (SSE) — answers stream token-by-token with a blinking cursor; sources highlight in the document view before the answer finishes
 - Vague query enrichment — follow-up questions like "tell me more" automatically include prior Q&A context
 - Dual-model Groq budget manager — tracks RPD per model in Redis, auto-switches from 70B → 8B when primary is exhausted, giving ~1,900 usable requests/day on free tier
 - Source highlighting — answers reference specific chunks, clicking source pills scrolls the document view
+- Answer actions — copy answer, copy with sources, regenerate, ask follow-up
 
 **Production-Minded Design:**
 - JWT authentication with bcrypt, user-scoped data isolation, `ON DELETE CASCADE` across all tables
@@ -212,10 +216,8 @@ The API is stateless by design (JWT auth, no server sessions), so horizontal sca
 
 | Priority | Feature | Why It Matters |
 |---|---|---|
-| **High** | **Hybrid search (BM25 + vector)** | Pure vector search misses exact keyword matches. Combining Postgres full-text search with pgvector similarity would improve retrieval precision by 20-30%. |
 | **High** | **OCR support (Tesseract)** | Image-only PDFs are currently rejected. Adding OCR opens the app to scanned contracts, receipts, and legacy documents. |
 | **High** | **Evaluation harness** | Automated test suite with question-answer pairs to measure retrieval recall and answer faithfulness. Currently quality assessment is manual. |
-| **Medium** | **Streaming responses (SSE)** | For longer answers, streaming gives better perceived performance. Groq's ~300 tok/s makes this less critical but still a UX improvement. |
 | **Medium** | **Multi-document workspace** | Schema already supports multiple documents per user. UI would add a document switcher and cross-document queries. |
 | **Medium** | **Dedicated vector DB at scale** | Migrate from pgvector to Qdrant/Weaviate at 10M+ vectors for horizontal sharding and advanced filtering. |
 | **Low** | **Refresh token flow** | Replace 24-hour access tokens with short-lived (15min) access + 7-day refresh tokens. |

@@ -40,6 +40,8 @@ export interface SourceChunk {
   char_start: number;
   char_end: number;
   similarity: number;
+  bm25_score?: number | null;
+  cosine_score?: number | null;
 }
 
 export interface BudgetInfo {

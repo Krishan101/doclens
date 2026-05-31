@@ -25,7 +25,18 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.execute(sa_text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
-    logger.info("Database tables ready")
+        # Hybrid search: add generated tsvector column + GIN index
+        await conn.execute(sa_text("""
+            DO $$ BEGIN
+                ALTER TABLE chunks ADD COLUMN content_tsv tsvector
+                    GENERATED ALWAYS AS (to_tsvector('english', content)) STORED;
+            EXCEPTION WHEN duplicate_column THEN NULL;
+            END $$
+        """))
+        await conn.execute(sa_text("""
+            CREATE INDEX IF NOT EXISTS idx_chunks_tsv ON chunks USING GIN(content_tsv)
+        """))
+    logger.info("Database tables ready (with hybrid search support)")
 
     # Pre-load embedding model
     model = get_embedding_model()

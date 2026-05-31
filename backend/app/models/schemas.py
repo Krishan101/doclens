@@ -80,6 +80,8 @@ class SourceChunk(BaseModel):
     char_start: int
     char_end: int
     similarity: float
+    bm25_score: Optional[float] = None
+    cosine_score: Optional[float] = None
 
 
 class BudgetInfo(BaseModel):

@@ -44,7 +44,7 @@ async def ask_question(
     query_embedding = await embed_with_cache(embedding_model, enriched, redis_client)
 
     # 3. Vector similarity search via repo
-    retrieved = await chunk_repo.vector_search(db, document_id, query_embedding, limit=5)
+    retrieved = await chunk_repo.hybrid_search(db, document_id, query_embedding, question, limit=5)
 
     # Debug: log similarity scores
     if retrieved:
@@ -136,7 +136,7 @@ async def ask_question_stream(
     query_embedding = await embed_with_cache(embedding_model, enriched, redis_client)
 
     # Retrieve
-    retrieved = await chunk_repo.vector_search(db, document_id, query_embedding, limit=5)
+    retrieved = await chunk_repo.hybrid_search(db, document_id, query_embedding, question, limit=5)
 
     # Relevance gate
     if not retrieved or retrieved[0]["similarity"] < settings.relevance_threshold:
@@ -383,6 +383,8 @@ def _format_source(s: dict) -> dict:
         "char_start": s["char_start"],
         "char_end": s["char_end"],
         "similarity": s["similarity"],
+        "bm25_score": s.get("bm25_score"),
+        "cosine_score": s.get("cosine_score"),
     }
 
 

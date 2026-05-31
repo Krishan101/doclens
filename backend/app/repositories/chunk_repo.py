@@ -82,5 +82,73 @@ async def hybrid_search(
     query_text: str,
     limit: int = 5,
 ) -> list[dict]:
-    """Stub — delegates to vector_search for now."""
-    return await vector_search(db, doc_id, embedding, limit)
+    """Hybrid search: combines vector similarity + BM25 full-text via Reciprocal Rank Fusion."""
+    embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
+
+    sql = text("""
+        WITH vector_ranked AS (
+            SELECT id,
+                   1 - (embedding <=> CAST(:emb AS vector)) AS cosine_score,
+                   ROW_NUMBER() OVER (
+                     ORDER BY embedding <=> CAST(:emb AS vector)
+                   ) AS vec_rank
+            FROM chunks
+            WHERE document_id = CAST(:doc_id AS uuid)
+            LIMIT 20
+        ),
+        bm25_ranked AS (
+            SELECT id,
+                   ts_rank_cd(content_tsv,
+                     plainto_tsquery('english', :qtext)) AS bm25_score,
+                   ROW_NUMBER() OVER (
+                     ORDER BY ts_rank_cd(content_tsv,
+                       plainto_tsquery('english', :qtext)) DESC
+                   ) AS bm25_rank
+            FROM chunks
+            WHERE document_id = CAST(:doc_id AS uuid)
+              AND content_tsv @@ plainto_tsquery('english', :qtext)
+            LIMIT 20
+        ),
+        combined AS (
+            SELECT
+                COALESCE(v.id, b.id) AS id,
+                COALESCE(v.cosine_score, 0.0) AS cosine_score,
+                COALESCE(b.bm25_score, 0.0) AS bm25_score,
+                (1.0 / (60 + COALESCE(v.vec_rank, 100))) +
+                (1.0 / (60 + COALESCE(b.bm25_rank, 100))) AS rrf_score
+            FROM vector_ranked v
+            FULL OUTER JOIN bm25_ranked b ON v.id = b.id
+        )
+        SELECT c.id, c.content, c.chunk_type, c.page_number,
+               c.char_start, c.char_end,
+               combined.cosine_score,
+               combined.bm25_score,
+               combined.rrf_score AS similarity
+        FROM combined
+        JOIN chunks c ON c.id = combined.id
+        ORDER BY rrf_score DESC
+        LIMIT :limit
+    """)
+
+    result = await db.execute(sql, {
+        "emb": embedding_str,
+        "doc_id": str(doc_id),
+        "qtext": query_text,
+        "limit": limit,
+    })
+
+    rows = result.fetchall()
+    return [
+        {
+            "id": row.id,
+            "content": row.content,
+            "chunk_type": row.chunk_type,
+            "page_number": row.page_number,
+            "char_start": row.char_start,
+            "char_end": row.char_end,
+            "similarity": round(float(row.similarity), 4),
+            "cosine_score": round(float(row.cosine_score), 4),
+            "bm25_score": round(float(row.bm25_score), 4),
+        }
+        for row in rows
+    ]

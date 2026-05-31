@@ -23,9 +23,14 @@ export default {
           '0%, 100%': { backgroundColor: '#fef3c7' },
           '50%': { backgroundColor: '#fde68a' },
         },
+        'slide-up': {
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
       },
       animation: {
         'highlight-pulse': 'highlight-pulse 1.5s ease-in-out 2',
+        'slide-up': 'slide-up 0.2s ease-out',
       },
     },
   },
