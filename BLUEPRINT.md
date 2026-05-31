@@ -28,7 +28,7 @@ DocLens is a document-centric RAG (Retrieval-Augmented Generation) web applicati
 | **PDF Extraction** | pdfplumber | Superior table extraction over PyMuPDF; handles structured content |
 | **Auth** | python-jose + passlib[bcrypt] | JWT creation/verification + secure password hashing; fully free |
 | **Redis** | Yes — included in Docker Compose | Three specific uses: (1) embedding cache for repeated similar queries, (2) Groq rate-limit + token budget tracking to preempt 429/exhaustion errors, (3) per-user daily query counter. Not used for sessions (JWT is stateless). |
-| **Dev/Deploy** | Docker Compose (4 containers) | One-command startup: `docker compose up --build` |
+| **Dev/Deploy** | Docker Compose (6 containers) | One-command startup: `docker compose up --build` |
 
 ### Key Libraries (All Free/Open-Source)
 

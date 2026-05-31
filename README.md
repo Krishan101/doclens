@@ -134,7 +134,7 @@ In production, the following would be added:
 | LLM | Llama 3.3 70B + 3.1 8B via Groq free tier |
 | Auth | JWT (python-jose + passlib) |
 | Cache | Redis (embedding cache + budget tracking) |
-| Infra | Docker Compose (4 containers) |
+| Infra | Docker Compose (6 containers: API, frontend, Postgres, Redis, Adminer, Redis Commander) |
 
 ## Environment Variables
 
@@ -258,7 +258,7 @@ Horizontal scaling adds capacity by running multiple instances behind a load bal
 - Redis caching for embeddings (1hr TTL) and suggested questions
 - All empty/error states designed (no white screens or raw JSON errors)
 - Health endpoint checking Postgres, Redis, and embedding model status
-- Admin tools: Adminer (DB browser), Redis Commander (cache viewer)
+- Dev admin tools: Adminer (DB browser at :8080), Redis Commander (cache viewer at :8081) — infrastructure tools for development and debugging, not user-facing
 
 **Architecture & Code Quality:**
 - Clean route → service → repository separation (no business logic in handlers)
@@ -278,6 +278,7 @@ Horizontal scaling adds capacity by running multiple instances behind a load bal
 | **Medium** | **Kubernetes deployment** | Helm chart for production deployment with auto-scaling, health probes, config maps, and secrets management. Docker Compose → K8s is the natural next step. | Operational: auto-scale API pods 2→16 based on load |
 | **Low** | **Embedding model fine-tuning** | Fine-tune MiniLM on domain-specific data (legal, medical, financial) for 15-25% retrieval improvement on specialized documents. | Vertical: better results without more compute |
 | **Low** | **Document structure awareness** | Detect headings, sections, and lists during chunking for semantically meaningful splits. Use document hierarchy for hierarchical retrieval (section → paragraph → sentence). | Quality: more precise retrieval reduces hallucination |
+| **Low** | **Admin panel + RBAC** | Role-based access control (admin/user) with an admin dashboard for user management, system metrics, document oversight, and Groq budget configuration. Currently all users are equal; admin tasks use Adminer/Redis Commander dev tools. | Operational: enterprise multi-tenant management |
 
 ## Full Design Documentation
 
