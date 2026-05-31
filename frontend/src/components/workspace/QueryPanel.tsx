@@ -66,6 +66,9 @@ export default function QueryPanel({ documentId }: QueryPanelProps) {
               {confidence && <ConfidenceBadge confidence={confidence as any} />}
             </div>
 
+            {/* Show the question */}
+            <p className="text-sm font-medium text-stone-700">{lastQuestion}</p>
+
             <div className="text-sm text-stone-800 leading-relaxed border-l-[3px] border-l-amber-500 pl-3">
               {streamedAnswer}
               {isStreaming && (

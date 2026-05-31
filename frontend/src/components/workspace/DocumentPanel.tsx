@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { Chunk } from '../../types';
 import ChunkBlock from './ChunkBlock';
@@ -6,6 +7,51 @@ import EmptyState from '../shared/EmptyState';
 interface DocumentPanelProps {
   chunks: Chunk[] | undefined;
   isLoading: boolean;
+}
+
+/**
+ * Remove overlapping text between adjacent chunks.
+ * Chunks have ~150 char overlap from the chunking algorithm.
+ * We trim the overlapping prefix from each chunk after the first.
+ */
+function deduplicateChunks(chunks: Chunk[]): (Chunk & { displayContent: string })[] {
+  if (chunks.length === 0) return [];
+
+  const result: (Chunk & { displayContent: string })[] = [
+    { ...chunks[0], displayContent: chunks[0].content },
+  ];
+
+  for (let i = 1; i < chunks.length; i++) {
+    const prev = chunks[i - 1];
+    const curr = chunks[i];
+
+    // Skip table chunks — no overlap dedup needed
+    if (curr.chunk_type === 'table' || prev.chunk_type === 'table') {
+      result.push({ ...curr, displayContent: curr.content });
+      continue;
+    }
+
+    // Find overlap: check if start of current matches end of previous
+    let overlapLen = 0;
+    const maxOverlap = Math.min(200, prev.content.length, curr.content.length);
+
+    for (let len = maxOverlap; len >= 20; len--) {
+      const prevEnd = prev.content.slice(-len).trim();
+      const currStart = curr.content.slice(0, len).trim();
+      if (prevEnd === currStart) {
+        overlapLen = len;
+        break;
+      }
+    }
+
+    if (overlapLen > 0) {
+      result.push({ ...curr, displayContent: curr.content.slice(overlapLen).trim() });
+    } else {
+      result.push({ ...curr, displayContent: curr.content });
+    }
+  }
+
+  return result;
 }
 
 export default function DocumentPanel({ chunks, isLoading }: DocumentPanelProps) {
@@ -21,14 +67,18 @@ export default function DocumentPanel({ chunks, isLoading }: DocumentPanelProps)
     return <EmptyState title="No content" description="This document has no extractable text." />;
   }
 
-  // Group by page
+  const dedupedChunks = useMemo(() => deduplicateChunks(chunks), [chunks]);
+
   let currentPage: number | null = null;
 
   return (
     <div className="h-full overflow-y-auto p-4 lg:p-6 space-y-1">
-      {chunks.map((chunk) => {
+      {dedupedChunks.map((chunk) => {
         const showPageBreak = chunk.page_number !== currentPage && chunk.page_number != null;
         currentPage = chunk.page_number;
+
+        // Skip chunks that became empty after dedup
+        if (!chunk.displayContent.trim()) return null;
 
         return (
           <div key={chunk.id}>
@@ -41,7 +91,7 @@ export default function DocumentPanel({ chunks, isLoading }: DocumentPanelProps)
             )}
             <ChunkBlock
               id={chunk.id}
-              content={chunk.content}
+              content={chunk.displayContent}
               chunkType={chunk.chunk_type}
               pageNumber={chunk.page_number}
               chunkIndex={chunk.chunk_index}
