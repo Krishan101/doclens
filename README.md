@@ -61,10 +61,6 @@ View live Groq budget tracking keys:
 
 ## Technology Choices & Rationale
 
-### Development Approach: AI-Assisted
-
-This project was built with AI assistance (Claude) for architecture planning, code generation, and iterative debugging. The system design, architectural decisions, and all technical tradeoffs were evaluated and validated by me. AI assistance accelerated implementation of boilerplate (Docker configs, auth plumbing, component scaffolding) while I focused on RAG pipeline quality, prompt engineering, and UX decisions. Every line of code was reviewed and understood before committing.
-
 ### LLM Choice: Groq Free Tier (Llama 3.3 70B)
 
 | Option Considered | Decision | Reasoning |
