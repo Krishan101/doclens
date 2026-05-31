@@ -4,11 +4,10 @@ from uuid import UUID
 from jose import jwt
 from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from fastapi import HTTPException, status
 
 from app.config import get_settings
-from app.models.database import User
+from app.repositories import user_repo
 
 settings = get_settings()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -30,24 +29,17 @@ def create_access_token(user_id: UUID) -> tuple[str, int]:
     return token, expires_in
 
 
-async def signup(db: AsyncSession, email: str, password: str) -> User:
-    result = await db.execute(select(User).where(User.email == email))
-    existing = result.scalar_one_or_none()
+async def signup(db: AsyncSession, email: str, password: str):
+    existing = await user_repo.get_by_email(db, email)
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
-
-    user = User(email=email, hashed_pw=hash_password(password))
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
+    user = await user_repo.create(db, email, hash_password(password))
     return user
 
 
 async def login(db: AsyncSession, email: str, password: str) -> tuple[str, int]:
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalar_one_or_none()
+    user = await user_repo.get_by_email(db, email)
     if not user or not verify_password(password, user.hashed_pw):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
-
     token, expires_in = create_access_token(user.id)
     return token, expires_in
