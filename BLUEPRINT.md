@@ -1057,33 +1057,6 @@ Docker Compose              →          Kubernetes (EKS/GKE) or managed contain
 
 ---
 
-## 12. Interview Talking Points
-
-### Design Decisions to Defend
-
-**1. "Why pgvector instead of a dedicated vector DB?"**
-
-> pgvector keeps vectors as a native Postgres column alongside relational data — chunks, documents, users — in a single database with referential integrity. When a user deletes their account, `ON DELETE CASCADE` removes their vectors atomically. With Pinecone or Weaviate, I'd need distributed transactions or eventual consistency for the same guarantee. For <100K vectors, pgvector's ivfflat index is fast enough (~10ms queries), and upgrading to HNSW is a config change, not a migration. The tradeoff is that at 10M+ vectors, a dedicated vector DB would offer better query performance and sharding — but that's a problem you solve when you have it, not when you have 50 users.
-
-**2. "Why a relevance threshold instead of always calling the LLM?"**
-
-> Every RAG system has a retrieval failure mode: the user asks something the document doesn't cover, retrieval returns the "least bad" chunks, and the LLM hallucinates an answer from them. The 0.3 cosine similarity threshold short-circuits this — if the best chunk isn't meaningfully related to the question, we tell the user directly instead of generating a confident-sounding wrong answer. This is a deliberate UX choice: false negatives (missing a relevant chunk) are recoverable — the user rephrases. False positives (hallucinated answers) destroy trust. I'd rather my system says "I don't know" too often than lies.
-
-**3. "Why source highlighting as the key feature instead of something like multi-doc or streaming?"**
-
-> Multi-doc is additive scope that doesn't demonstrate architectural depth. Streaming is infrastructure plumbing that doesn't demonstrate RAG understanding. Source highlighting forces several hard engineering choices — chunk metadata with character offsets, a schema that links answers to their source chunks, and a frontend interaction model that treats the document as the primary interface element. It's also the feature that most directly addresses what makes RAG valuable: grounding. When an interviewer sees the answer and its source passages highlighted simultaneously, they immediately understand that the system is trustworthy. That's harder to communicate with a chat interface.
-
-**4. "What would you change if you had two more weeks?"**
-
-> Three things. First, hybrid search: right now I use pure vector similarity, but adding BM25 keyword search (via Postgres full-text search) and combining scores would catch cases where the user's question uses exact terminology from the document that embedding similarity misses. Second, evaluation: I'd build a small test harness that runs a set of question-answer pairs against the pipeline and measures retrieval recall and answer faithfulness — right now quality assessment is manual. Third, I'd add document structure awareness to the chunking — detecting headings, sections, and lists in the PDF and using that hierarchy to create more semantically meaningful chunks instead of fixed-size splits.
-
-### What Raises the Bar
-
-1. **Grounding-first design philosophy** — the relevance threshold, the source highlighting, the confidence scores. Every feature reinforces the idea that this system knows what it doesn't know.
-2. **Schema quality** — UUIDs, cascade deletes, char offsets, chunk metadata, audit trail in queries table. An evaluator reading the migration file should think "this person has built production systems."
-3. **Error state completeness** — every failure mode has an intentional UI. No white screens, no raw JSON. This signals more production experience than any architecture diagram.
-4. **One-command reproducibility** — `docker compose up --build`, wait 60 seconds, open browser. If the evaluator can't run it, nothing else matters.
-
 ---
 
 ## Appendix: File Structure
@@ -1095,44 +1068,44 @@ doclens/
 ├── README.md
 ├── BLUEPRINT.md
 │
+├── samples/
+│   ├── sample-architecture.txt       # Test document
+│   └── test-api.sh                   # API smoke test script
+│
 ├── backend/
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   ├── alembic.ini
 │   ├── alembic/
 │   │   └── versions/
-│   │       └── 001_initial_schema.py
+│   │       └── 002_hybrid_search.py  # BM25 tsvector + GIN index migration
 │   ├── app/
-│   │   ├── main.py                  # FastAPI app factory
-│   │   ├── config.py                # Settings from env vars (Pydantic BaseSettings)
-│   │   ├── dependencies.py          # DB session, auth, embedding model
+│   │   ├── main.py                   # FastAPI app factory, lifespan, CORS
+│   │   ├── config.py                 # Settings from env vars (Pydantic BaseSettings)
+│   │   ├── dependencies.py           # DB session, auth, embedding model, Redis
 │   │   ├── routes/
-│   │   │   ├── auth.py              # POST /signup, /login
-│   │   │   ├── documents.py         # POST, GET, DELETE /documents
-│   │   │   └── queries.py           # POST, GET /queries
+│   │   │   ├── auth.py               # POST /signup, /login
+│   │   │   ├── documents.py          # POST, GET, DELETE /documents
+│   │   │   └── queries.py            # POST /queries, POST /queries/stream, GET /budget
 │   │   ├── services/
-│   │   │   ├── auth_service.py      # JWT + password logic
-│   │   │   ├── document_service.py  # Upload, extract, chunk, embed
-│   │   │   ├── query_service.py     # Retrieve, prompt, generate
-│   │   │   ├── llm_service.py       # Groq/Ollama abstraction
-│   │   │   └── groq_budget.py       # Token/RPM tracking, model fallback, Redis counters
+│   │   │   ├── auth_service.py       # JWT + password logic
+│   │   │   ├── document_service.py   # Upload, extract, chunk, embed pipeline
+│   │   │   ├── query_service.py      # RAG pipeline + streaming + suggestions
+│   │   │   ├── llm_service.py        # Groq API wrapper with error handling
+│   │   │   └── groq_budget.py        # Per-model RPD tracking, dual-model fallback
 │   │   ├── repositories/
-│   │   │   ├── user_repo.py
-│   │   │   ├── document_repo.py
-│   │   │   ├── chunk_repo.py
-│   │   │   └── query_repo.py
+│   │   │   ├── user_repo.py          # User CRUD
+│   │   │   ├── document_repo.py      # Document CRUD + status updates
+│   │   │   ├── chunk_repo.py         # Bulk insert, vector search, hybrid search (RRF)
+│   │   │   └── query_repo.py         # Query CRUD + history + recent activity
 │   │   ├── models/
-│   │   │   ├── database.py          # SQLAlchemy models
-│   │   │   └── schemas.py           # Pydantic request/response models
+│   │   │   ├── database.py           # SQLAlchemy models (User, Document, Chunk, Query)
+│   │   │   └── schemas.py            # Pydantic request/response schemas
 │   │   └── utils/
-│   │       ├── text_extraction.py   # pdfplumber + txt handling
-│   │       ├── chunking.py          # RecursiveCharacterTextSplitter wrapper
-│   │       └── embeddings.py        # sentence-transformers wrapper + Redis cache
+│   │       ├── text_extraction.py    # pdfplumber + txt extraction with page offsets
+│   │       ├── chunking.py           # Recursive text splitting with char offset tracking
+│   │       └── embeddings.py         # sentence-transformers wrapper + Redis cache
 │   └── tests/
-│       ├── conftest.py
-│       ├── test_auth.py
-│       ├── test_documents.py
-│       └── test_queries.py
 │
 ├── frontend/
 │   ├── Dockerfile
@@ -1144,41 +1117,47 @@ doclens/
 │   └── src/
 │       ├── main.tsx
 │       ├── App.tsx
+│       ├── index.css
+│       ├── vite-env.d.ts
 │       ├── api/
-│       │   └── client.ts            # Axios instance + interceptors
+│       │   └── client.ts             # Axios instance + JWT interceptor
 │       ├── hooks/
 │       │   ├── useAuth.ts
-│       │   ├── useDocuments.ts
-│       │   └── useQueries.ts
+│       │   ├── useDocuments.ts       # Upload, list, delete, poll status
+│       │   ├── useQueries.ts         # Query history, suggestions, budget
+│       │   └── useStreamingQuery.ts  # SSE streaming hook
 │       ├── context/
 │       │   ├── AuthContext.tsx
-│       │   └── HighlightContext.tsx
+│       │   └── HighlightContext.tsx   # Source chunk highlighting + search query
 │       ├── pages/
 │       │   ├── LoginPage.tsx
 │       │   ├── SignupPage.tsx
-│       │   ├── DashboardPage.tsx
-│       │   └── WorkspacePage.tsx
+│       │   ├── DashboardPage.tsx      # Document list + upload zone
+│       │   └── WorkspacePage.tsx      # Split layout: document + query panel
 │       ├── components/
 │       │   ├── auth/
 │       │   │   └── AuthForm.tsx
 │       │   ├── dashboard/
-│       │   │   ├── UploadZone.tsx
-│       │   │   └── DocumentCard.tsx
+│       │   │   ├── UploadZone.tsx     # Drag-and-drop + click upload
+│       │   │   └── DocumentCard.tsx   # Status badge, delete, navigate
 │       │   ├── workspace/
 │       │   │   ├── WorkspaceHeader.tsx
-│       │   │   ├── DocumentPanel.tsx
-│       │   │   ├── ChunkBlock.tsx
-│       │   │   ├── QueryPanel.tsx
-│       │   │   ├── QueryInput.tsx
-│       │   │   ├── ActiveAnswer.tsx
-│       │   │   ├── SourcePill.tsx
+│       │   │   ├── DocumentPanel.tsx  # Scrollable chunk view with page dividers
+│       │   │   ├── ChunkBlock.tsx     # Keyword highlighting within chunks
+│       │   │   ├── QueryPanel.tsx     # Streaming answers + suggestions + history
+│       │   │   ├── QueryInput.tsx     # forwardRef input with focus/setValue
+│       │   │   ├── ActiveAnswer.tsx   # Non-streaming answer display
+│       │   │   ├── AnswerActions.tsx  # Copy, copy with sources, regenerate, follow-up
+│       │   │   ├── SourcePill.tsx     # Clickable badge with BM25 indicator
 │       │   │   ├── ConfidenceBadge.tsx
-│       │   │   └── QueryHistory.tsx
+│       │   │   ├── BudgetIndicator.tsx
+│       │   │   └── QueryHistory.tsx   # Collapsible past Q&A pairs
 │       │   └── shared/
 │       │       ├── ProtectedRoute.tsx
-│       │       └── EmptyState.tsx
+│       │       ├── EmptyState.tsx
+│       │       └── ErrorBoundary.tsx
 │       └── types/
-│           └── index.ts             # Shared TypeScript interfaces
+│           └── index.ts              # Shared TypeScript interfaces
 ```
 
 ---

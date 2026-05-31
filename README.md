@@ -165,20 +165,74 @@ See `.env.example` for the full list.
 
 ## Scalability Path
 
-**Local (now):** Docker Compose, 6 containers, single machine.
+### Current Architecture (Local)
 
-**Production scaling by tier:**
+Docker Compose, 6 containers, single machine. Handles 1–100 concurrent users comfortably.
 
-| Scale | Changes |
+### Vertical Scaling (Scale Up)
+
+Vertical scaling improves performance without changing architecture.
+
+| Bottleneck | Current | Scaled Up |
+|---|---|---|
+| **Embedding inference** | CPU-bound, ~50ms/chunk | GPU instance (p3.2xlarge) → ~5ms/chunk, 10x throughput |
+| **Postgres** | Default config, shared_buffers=128MB | Tuned: shared_buffers=4GB, work_mem=256MB, effective_cache_size=12GB |
+| **pgvector index** | `ivfflat` (lists=100) | `HNSW` (m=16, ef_construction=200) → 3-5x faster queries at 1M+ vectors |
+| **LLM inference** | Groq free tier (1,000 RPD/model) | Groq paid tier or self-hosted vLLM on GPU → unlimited requests |
+| **Redis** | Single instance, default config | maxmemory=2GB with LRU eviction, persistence with AOF |
+
+### Horizontal Scaling (Scale Out)
+
+Horizontal scaling adds capacity by running multiple instances behind a load balancer. The API is **stateless by design** (JWT auth, no server-side sessions, all state in Postgres/Redis), making this straightforward.
+
+```
+                    ┌──────────────┐
+                    │ Load Balancer│
+                    │  (ALB/nginx) │
+                    └──────┬───────┘
+                           │
+            ┌──────────────┼──────────────┐
+            │              │              │
+     ┌──────▼──────┐ ┌────▼───────┐ ┌────▼───────┐
+     │  API Pod 1  │ │  API Pod 2 │ │  API Pod 3 │
+     │  (FastAPI)  │ │  (FastAPI) │ │  (FastAPI) │
+     └──────┬──────┘ └────┬───────┘ └────┬───────┘
+            │              │              │
+     ┌──────▼──────────────▼──────────────▼──────┐
+     │            Shared Data Layer                │
+     │  ┌──────────┐  ┌───────┐  ┌────────────┐  │
+     │  │ Postgres  │  │ Redis │  │ Embedding   │  │
+     │  │ (RDS)     │  │(Elast │  │ Service     │  │
+     │  │ +pgvector │  │ Cache)│  │ (separate)  │  │
+     │  └──────────┘  └───────┘  └────────────┘  │
+     └────────────────────────────────────────────┘
+```
+
+| Component | Horizontal Strategy |
 |---|---|
-| **1–100 users** | Current Docker Compose setup handles this fine |
-| **100–1K users** | Postgres → RDS/Cloud SQL, Redis → ElastiCache, API behind ALB, Celery for document processing |
-| **1K–10K users** | pgvector `ivfflat` → `HNSW` index, embedding model as separate service, frontend → S3 + CloudFront |
-| **10K+ users** | **pgvector → dedicated vector DB (Qdrant/Weaviate)** for advanced sharding, filtering, and multi-tenant isolation at 10M+ vectors. Partition chunks table by user/org. Groq → self-hosted vLLM on GPU instances |
+| **API (FastAPI)** | Deploy N replicas behind ALB. Each is stateless — any pod handles any request. Auto-scale on CPU/memory thresholds. |
+| **Document Processing** | Move from FastAPI BackgroundTasks to Celery worker pool with Redis broker. Each worker processes documents independently. Scale worker count based on queue depth. |
+| **Embedding Service** | Extract sentence-transformers into a dedicated microservice with its own scaling. API pods call it via internal HTTP. Batch embedding requests for GPU efficiency. |
+| **PostgreSQL** | Read replicas for query-heavy workloads. Connection pooling via PgBouncer (single-transaction mode). At 10M+ vectors, partition chunks table by `document_id` hash. |
+| **Redis** | Redis Cluster for horizontal sharding. Separate clusters for cache (volatile, LRU) vs. budget tracking (persistent, AOF). |
+| **Frontend** | Static build → S3/CloudFront CDN. Zero scaling concerns — it's just files. |
 
-**Why pgvector now, Qdrant later:** pgvector keeps vectors as a native Postgres column with full relational integrity (`ON DELETE CASCADE`, foreign keys, transactions). At <1M vectors, query latency is under 10ms. A dedicated vector DB like Qdrant adds operational complexity (separate cluster, separate backups, distributed consistency) that's only justified at 10M+ vectors where you need horizontal sharding, advanced multi-vector search, or payload-based filtering beyond what SQL `WHERE` clauses offer.
+### Scaling by User Tier
 
-The API is stateless by design (JWT auth, no server sessions), so horizontal scaling requires only a load balancer.
+| Scale | Vertical Changes | Horizontal Changes | Estimated Cost |
+|---|---|---|---|
+| **1–100** | None (Docker Compose) | None | $0 (local) |
+| **100–1K** | Postgres → RDS (db.r6g.large), Redis → ElastiCache | 2 API pods behind ALB | ~$150/month |
+| **1K–10K** | HNSW index, GPU for embeddings | 4-8 API pods, Celery workers, embedding service | ~$800/month |
+| **10K–100K** | pgvector → Qdrant cluster, vLLM on GPU | 16+ API pods, partitioned DB, Redis cluster, CDN | ~$5K/month |
+
+### Key Design Decisions That Enable Scale
+
+1. **Stateless API** — JWT tokens carry auth state. No server sessions, no sticky sessions needed. Any API pod handles any request.
+2. **Repository pattern** — All DB access through repos. Swapping Postgres for a read-replica or Qdrant means changing one repo file, not touching service logic.
+3. **Redis for ephemeral state** — Budget tracking, embedding cache, rate limits — all in Redis with TTLs. If Redis dies, the app degrades gracefully (re-computes embeddings, loses budget count).
+4. **Hybrid search via SQL** — BM25 + vector search runs entirely in Postgres. No external search service needed until 10M+ vectors.
+5. **Background processing** — Document pipeline already runs async. Moving to Celery workers is a config change, not a rewrite.
 
 ## What Was Achieved
 
@@ -214,15 +268,17 @@ The API is stateless by design (JWT auth, no server sessions), so horizontal sca
 
 ## What I'd Add Next (Future Improvements)
 
-| Priority | Feature | Why It Matters |
-|---|---|---|
-| **High** | **OCR support (Tesseract)** | Image-only PDFs are currently rejected. Adding OCR opens the app to scanned contracts, receipts, and legacy documents. |
-| **High** | **Evaluation harness** | Automated test suite with question-answer pairs to measure retrieval recall and answer faithfulness. Currently quality assessment is manual. |
-| **Medium** | **Multi-document workspace** | Schema already supports multiple documents per user. UI would add a document switcher and cross-document queries. |
-| **Medium** | **Dedicated vector DB at scale** | Migrate from pgvector to Qdrant/Weaviate at 10M+ vectors for horizontal sharding and advanced filtering. |
-| **Low** | **Refresh token flow** | Replace 24-hour access tokens with short-lived (15min) access + 7-day refresh tokens. |
-| **Low** | **Document structure awareness** | Detect headings, sections, and lists during chunking for more semantically meaningful splits instead of fixed-size. |
+| Priority | Feature | Why It Matters | Scaling Impact |
+|---|---|---|---|
+| **High** | **Celery task queue** | Replace FastAPI BackgroundTasks with Celery + Redis broker for document processing. Enables horizontal worker scaling and retry logic for failed jobs. | Horizontal: N workers process N documents in parallel |
+| **High** | **Evaluation harness** | Automated test suite with question-answer pairs measuring retrieval recall (P@5, MRR) and answer faithfulness (RAGAS). Currently quality assessment is manual. | Operational: catch retrieval regressions before they reach users |
+| **High** | **OCR support (Tesseract)** | Image-only PDFs are currently rejected. Adding OCR unlocks scanned contracts, receipts, and legacy documents — the most common enterprise use case. | Feature: 40%+ of enterprise PDFs are scanned |
+| **Medium** | **Dedicated vector DB (Qdrant)** | At 10M+ vectors, pgvector's single-node architecture becomes a bottleneck. Qdrant offers horizontal sharding, payload filtering, and quantization for memory efficiency. | Horizontal: shard vectors across N nodes |
+| **Medium** | **Multi-document cross-referencing** | Schema supports multi-doc per user. Future: cross-document queries that search across all user documents simultaneously with document-level re-ranking. | Feature: "find contradictions between these two contracts" |
+| **Medium** | **Kubernetes deployment** | Helm chart for production deployment with auto-scaling, health probes, config maps, and secrets management. Docker Compose → K8s is the natural next step. | Operational: auto-scale API pods 2→16 based on load |
+| **Low** | **Embedding model fine-tuning** | Fine-tune MiniLM on domain-specific data (legal, medical, financial) for 15-25% retrieval improvement on specialized documents. | Vertical: better results without more compute |
+| **Low** | **Document structure awareness** | Detect headings, sections, and lists during chunking for semantically meaningful splits. Use document hierarchy for hierarchical retrieval (section → paragraph → sentence). | Quality: more precise retrieval reduces hallucination |
 
 ## Full Design Documentation
 
-See [BLUEPRINT.md](./BLUEPRINT.md) for the complete system design, database schema, RAG pipeline details, edge case analysis, scalability path, and interview talking points.
+See [BLUEPRINT.md](./BLUEPRINT.md) for the complete system design, database schema, RAG pipeline details, edge case analysis, and scalability architecture.
