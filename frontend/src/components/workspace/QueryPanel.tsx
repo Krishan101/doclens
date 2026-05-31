@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Search, Sparkles, Loader2 } from 'lucide-react';
 import { useQueryHistory, useSuggestions } from '../../hooks/useQueries';
 import { useStreamingQuery } from '../../hooks/useStreamingQuery';
@@ -31,11 +31,13 @@ export default function QueryPanel({ documentId }: QueryPanelProps) {
     stream(documentId, question);
   };
 
-  // Highlight sources as soon as they arrive
-  if (sources.length > 0) {
-    const chunkIds = sources.map((s) => s.chunk_id);
-    setHighlights(chunkIds, lastQuestion);
-  }
+  // Highlight sources when they arrive (useEffect prevents infinite loop)
+  useEffect(() => {
+    if (sources.length > 0 && lastQuestion) {
+      const chunkIds = sources.map((s) => s.chunk_id);
+      setHighlights(chunkIds, lastQuestion);
+    }
+  }, [sources, lastQuestion]);
 
   const suggestions = suggestionsData?.suggestions || [];
   const showSuggestions = !isStreaming && !streamedAnswer && !isDone && suggestions.length > 0;
