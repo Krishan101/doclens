@@ -1,4 +1,5 @@
 import { FileSearch, LogOut, FileText, Moon, Sun, MessageSquare, BarChart3, Zap } from 'lucide-react';
+import { ReactNode } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useDocuments } from '../hooks/useDocuments';
@@ -94,7 +95,7 @@ export default function DashboardPage() {
 }
 
 function StatCard({ icon, label, value, accent }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   value: string | number;
   accent?: boolean;
