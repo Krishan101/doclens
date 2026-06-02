@@ -2,33 +2,64 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Smooth scrolling for the document panel */
 html {
   scroll-behavior: smooth;
 }
 
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 6px;
-}
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d6d3d1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #a8a29e; }
+.dark ::-webkit-scrollbar-thumb { background: #57534e; }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #d6d3d1;
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #a8a29e;
-}
-
-/* Line clamp utility */
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* === DARK MODE — global overrides === */
+/* This approach avoids adding dark: to every component */
+
+.dark body,
+.dark .bg-stone-50 { background-color: #0c0a09; }
+.dark .bg-white { background-color: #1c1917; }
+.dark .bg-stone-100 { background-color: #292524; }
+
+.dark .text-stone-900 { color: #fafaf9; }
+.dark .text-stone-800 { color: #e7e5e4; }
+.dark .text-stone-700 { color: #d6d3d1; }
+.dark .text-stone-600 { color: #a8a29e; }
+.dark .text-stone-500 { color: #78716c; }
+
+.dark .border-stone-200 { border-color: #292524; }
+.dark .border-stone-300 { border-color: #44403c; }
+
+.dark input,
+.dark textarea {
+  background-color: #292524;
+  border-color: #44403c;
+  color: #e7e5e4;
+}
+
+.dark input::placeholder {
+  color: #78716c;
+}
+
+.dark .bg-red-50 { background-color: #1c1917; }
+.dark .bg-green-50 { background-color: #1c1917; }
+.dark .bg-amber-50 { background-color: #1c1917; }
+.dark .bg-blue-50 { background-color: #1c1917; }
+.dark .bg-accent-50 { background-color: rgba(245, 158, 11, 0.1); }
+
+.dark pre, .dark code {
+  color: #d6d3d1;
+}
+
+/* Keep highlight marks visible in dark mode */
+.dark mark {
+  background-color: #b45309;
+  color: #fafaf9;
 }

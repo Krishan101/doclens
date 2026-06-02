@@ -18,10 +18,10 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950 transition-colors">
       <header className="bg-white dark:bg-stone-900 border-b border-stone-200 dark:border-stone-800">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
             <FileSearch className="w-6 h-6 text-accent-500" />
             <h1 className="text-lg font-bold text-stone-900 dark:text-stone-100">DocLens</h1>
-          </div>
+          </button>
           <div className="flex items-center gap-3">
             <button
               onClick={toggleTheme}
