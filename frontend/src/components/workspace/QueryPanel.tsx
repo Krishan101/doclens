@@ -7,6 +7,7 @@ import QueryInput, { QueryInputRef } from './QueryInput';
 import ConfidenceBadge from './ConfidenceBadge';
 import SourcePill from './SourcePill';
 import AnswerActions from './AnswerActions';
+import FeedbackButtons from './FeedbackButtons';
 import QueryHistory from './QueryHistory';
 
 interface QueryPanelProps {
@@ -111,6 +112,9 @@ export default function QueryPanel({ documentId }: QueryPanelProps) {
                     queryInputRef.current?.focus();
                   }}
                 />
+                {(finalResult as any)?.query_id && (
+                  <FeedbackButtons queryId={(finalResult as any).query_id} />
+                )}
               </>
             )}
           </div>

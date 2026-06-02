@@ -310,4 +310,4 @@ Horizontal scaling adds capacity by running multiple instances behind a load bal
 
 ## Full Design Documentation
 
-See [BLUEPRINT.md](./BLUEPRINT.md) for the complete system design, database schema, RAG pipeline details, edge case analysis, and scalability architecture.
+See [docs/SYSTEM_DESIGN.md](./docs/SYSTEM_DESIGN.md) for the complete system design, database schema, RAG pipeline details, edge case analysis, and scalability architecture.

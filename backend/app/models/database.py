@@ -34,6 +34,7 @@ class Document(Base):
     file_type = Column(String(10), nullable=False)
     file_size = Column(Integer, nullable=False)
     raw_text = Column(Text)
+    summary = Column(Text)              # AI-generated document summary
     page_count = Column(Integer)
     status = Column(String(20), nullable=False, default="processing")
     error_msg = Column(String(500))
@@ -80,3 +81,13 @@ class Query(Base):
 
     user = relationship("User", back_populates="queries")
     document = relationship("Document", back_populates="queries")
+
+
+class Feedback(Base):
+    __tablename__ = "feedback"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    query_id = Column(UUID(as_uuid=True), ForeignKey("queries.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    rating = Column(String(10), nullable=False)  # 'up' or 'down'
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

@@ -18,6 +18,7 @@ export interface Document {
   page_count: number | null;
   status: 'processing' | 'ready' | 'failed' | 'empty';
   error_msg: string | null;
+  summary: string | null;
   chunk_count: number | null;
   created_at: string;
 }
@@ -82,4 +83,13 @@ export interface BudgetStatus {
   remaining_pct: number;
   active_model: string;
   resets_at: string;
+}
+
+export interface DashboardStats {
+  total_documents: number;
+  total_queries: number;
+  avg_confidence_pct: number;
+  positive_feedback_pct: number | null;
+  total_feedback: number;
+  budget_remaining_pct: number;
 }

@@ -41,6 +41,7 @@ class DocumentResponse(BaseModel):
     page_count: Optional[int] = None
     status: str
     error_msg: Optional[str] = None
+    summary: Optional[str] = None
     chunk_count: Optional[int] = None
     created_at: datetime
 
@@ -139,3 +140,31 @@ class HealthResponse(BaseModel):
     postgres: bool
     redis: bool
     embedding_model: bool
+
+
+# === Feedback ===
+
+class FeedbackRequest(BaseModel):
+    query_id: UUID
+    rating: str = Field(..., pattern="^(up|down)$")
+
+
+class FeedbackResponse(BaseModel):
+    id: UUID
+    query_id: UUID
+    rating: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# === Dashboard Stats ===
+
+class DashboardStats(BaseModel):
+    total_documents: int
+    total_queries: int
+    avg_confidence_pct: float
+    positive_feedback_pct: float | None
+    total_feedback: int
+    budget_remaining_pct: int

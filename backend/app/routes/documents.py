@@ -3,10 +3,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, BackgroundTasks, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_db, get_current_user_id, get_embedding_model, async_session_factory
+from app.dependencies import get_db, get_current_user_id, get_embedding_model, async_session_factory, get_redis
 from app.models.schemas import DocumentResponse, DocumentChunksResponse
 from app.services import document_service
 from app.config import get_settings
+import redis.asyncio as aioredis
 
 settings = get_settings()
 router = APIRouter(prefix="/api/documents", tags=["documents"])
@@ -24,6 +25,7 @@ async def upload_document(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
+    redis_client: aioredis.Redis = Depends(get_redis),
 ):
     # Validate file type
     ext = "." + file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
@@ -61,6 +63,7 @@ async def upload_document(
                 file_bytes=file_bytes,
                 file_type=file_type,
                 embedding_model=embedding_model,
+                redis_client=redis_client,
             )
 
     background_tasks.add_task(_process)

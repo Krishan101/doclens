@@ -53,6 +53,7 @@ async def update_status(
     error_msg: str | None = None,
     raw_text: str | None = None,
     page_count: int | None = None,
+    summary: str | None = None,
 ) -> None:
     result = await db.execute(select(Document).where(Document.id == doc_id))
     doc = result.scalar_one_or_none()
@@ -64,6 +65,8 @@ async def update_status(
             doc.raw_text = raw_text
         if page_count is not None:
             doc.page_count = page_count
+        if summary is not None:
+            doc.summary = summary
         await db.commit()
 
 

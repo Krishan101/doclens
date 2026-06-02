@@ -50,3 +50,20 @@ export function useBudget() {
     refetchInterval: 30000, // refresh every 30s
   });
 }
+
+export function useDashboardStats() {
+  return useQuery<{
+    total_documents: number;
+    total_queries: number;
+    avg_confidence_pct: number;
+    positive_feedback_pct: number | null;
+    total_feedback: number;
+    budget_remaining_pct: number;
+  }>({
+    queryKey: ['dashboard-stats'],
+    queryFn: async () => {
+      const res = await api.get('/stats');
+      return res.data;
+    },
+  });
+}

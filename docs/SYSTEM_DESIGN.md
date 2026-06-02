@@ -1,4 +1,4 @@
-# BLUEPRINT.md — DocLens: Document-Grounded RAG Application
+# DocLens — System Design: Document-Grounded RAG Application
 
 ---
 
@@ -1066,7 +1066,7 @@ doclens/
 ├── docker-compose.yml
 ├── .env.example
 ├── README.md
-├── BLUEPRINT.md
+├── docs/SYSTEM_DESIGN.md
 │
 ├── samples/
 │   ├── sample-architecture.txt       # Test document
@@ -1173,8 +1173,8 @@ it's addressed in this project.
 |---|---|---|
 | **App quality** | Clean route/service/repo separation, typed Pydantic models, no business logic in handlers | `backend/app/routes/`, `services/`, `repositories/` |
 | **Front/back end separation** | React SPA (port 5173) ↔ FastAPI REST API (port 8000), no server-rendered HTML | `frontend/` and `backend/` are independent Docker containers |
-| **System design** | Full architecture diagram, component responsibilities, data flow documentation | `BLUEPRINT.md` Sections 3–7, also summarized in `README.md` |
-| **Scalability** | Docker Compose → K8s path documented, pgvector index strategy, horizontal API scaling | `BLUEPRINT.md` Section 10, README "Production Architecture" |
+| **System design** | Full architecture diagram, component responsibilities, data flow documentation | `docs/SYSTEM_DESIGN.md` Sections 3–7, also summarized in `README.md` |
+| **Scalability** | Docker Compose → K8s path documented, pgvector index strategy, horizontal API scaling | `docs/SYSTEM_DESIGN.md` Section 10, README "Production Architecture" |
 | **Distributed system architecture** | Stateless API (JWT, no sessions), external state in Postgres/Redis, ready for LB + replicas | Architecture diagram, no in-memory state in API layer |
 | **UI/UX clean and usable** | Document-centric layout (not chat clone), source highlighting, all empty/error states designed | `frontend/src/pages/WorkspacePage.tsx`, component tree |
 | **DB: Postgres** | PostgreSQL 16 + pgvector extension, 4 tables, proper FK cascades, migration-managed | `backend/alembic/versions/001_initial_schema.py` |
@@ -1190,8 +1190,8 @@ it's addressed in this project.
 
 | Artifact | Deliverable | Status |
 |---|---|---|
-| System Design | `BLUEPRINT.md` + architecture section in `README.md` | Designed |
-| What achieved vs future | "In Scope vs Future" in `BLUEPRINT.md` Section 11, summarized in README | Designed |
-| Scalability thoughts | `BLUEPRINT.md` Section 10 + README "Production Architecture" | Designed |
+| System Design | `docs/SYSTEM_DESIGN.md` + architecture section in `README.md` | Designed |
+| What achieved vs future | "In Scope vs Future" in `docs/SYSTEM_DESIGN.md` Section 11, summarized in README | Designed |
+| Scalability thoughts | `docs/SYSTEM_DESIGN.md` Section 10 + README "Production Architecture" | Designed |
 | GitHub repo | Single monorepo with `docker-compose.yml` at root | To build |
 

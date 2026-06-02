@@ -7,9 +7,13 @@ import redis.asyncio as aioredis
 import json
 
 from app.dependencies import get_db, get_current_user_id, get_embedding_model, get_redis
-from app.models.schemas import QueryRequest, QueryResponse, QueryHistoryItem, BudgetResponse
+from app.models.schemas import (
+    QueryRequest, QueryResponse, QueryHistoryItem, BudgetResponse,
+    FeedbackRequest, FeedbackResponse, DashboardStats,
+)
 from app.services import query_service
 from app.services.groq_budget import GroqBudgetManager
+from app.repositories import feedback_repo, query_repo, document_repo
 
 router = APIRouter(prefix="/api", tags=["queries"])
 
@@ -105,3 +109,66 @@ async def get_budget(
 ):
     budget_mgr = GroqBudgetManager(redis_client)
     return await budget_mgr.get_budget_status()
+
+
+@router.post("/feedback", response_model=FeedbackResponse, status_code=201)
+async def submit_feedback(
+    req: FeedbackRequest,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Submit thumbs up/down feedback on an answer."""
+    existing = await feedback_repo.get_for_query(db, req.query_id, UUID(user_id))
+    if existing:
+        raise HTTPException(status_code=409, detail="Feedback already submitted for this answer")
+    fb = await feedback_repo.create(db, req.query_id, UUID(user_id), req.rating)
+    return fb
+
+
+@router.get("/stats", response_model=DashboardStats)
+async def get_dashboard_stats(
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+    redis_client: aioredis.Redis = Depends(get_redis),
+):
+    """Dashboard analytics: total docs, queries, avg confidence, feedback stats."""
+    from sqlalchemy import select, func
+    from app.models.database import Document, Query
+
+    # Total documents
+    result = await db.execute(
+        select(func.count(Document.id)).where(Document.user_id == UUID(user_id))
+    )
+    total_docs = result.scalar() or 0
+
+    # Total queries
+    result = await db.execute(
+        select(func.count(Query.id)).where(Query.user_id == UUID(user_id))
+    )
+    total_queries = result.scalar() or 0
+
+    # Average confidence
+    result = await db.execute(
+        select(Query.confidence).where(Query.user_id == UUID(user_id))
+    )
+    confidences = [r[0] for r in result.fetchall()]
+    conf_scores = {"high": 100, "low": 50, "none": 0}
+    avg_conf = 0.0
+    if confidences:
+        avg_conf = round(sum(conf_scores.get(c, 0) for c in confidences) / len(confidences), 1)
+
+    # Feedback stats
+    fb_stats = await feedback_repo.get_stats(db, UUID(user_id))
+
+    # Budget
+    budget_mgr = GroqBudgetManager(redis_client)
+    budget = await budget_mgr.get_budget_status()
+
+    return DashboardStats(
+        total_documents=total_docs,
+        total_queries=total_queries,
+        avg_confidence_pct=avg_conf,
+        positive_feedback_pct=fb_stats["positive_pct"],
+        total_feedback=fb_stats["total"],
+        budget_remaining_pct=budget["remaining_pct"],
+    )
